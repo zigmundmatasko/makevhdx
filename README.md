@@ -21,7 +21,7 @@ Destination  Specifies conversion destination.
 Supported Image Types and File Extensions
  VHDX : .vhdx (.avhdx Disallowed)
  VHD  : .vhd  (.avhd  Disallowed)
- VMDK : .vmdk (only for destination, automatically add suffix '-flat', output is sparse)
+ VMDK : .vmdk (only for destination)
  RAW  : .* (Other than above)
 ```
 ## Requirements and Limitations
@@ -36,6 +36,11 @@ Supported Image Types and File Extensions
 - Block size other than 2 MB can be specified, but only 2 MB can be used by Microsoft VHD parser.
 ### Convertion from Fixed type to Dynamic type
 - Output image will be large. This tool does not inspect file system free space in image, or zero-ed data block.
+
+### Convertion from VHD/VHDX to VMDK
+- output 2 files; <b>filename</b>.vmdk (descriptor file) and <b>filename</b>-flat.vmdk (raw disk image)
+- support import to vmware (for example over Microsoft NFS)
+- automatically use -fixed and -sparse
 
 ## License
 MIT License
