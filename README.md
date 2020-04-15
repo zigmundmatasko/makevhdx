@@ -38,7 +38,7 @@ Supported Image Types and File Extensions
 - Output image will be large. This tool does not inspect file system free space in image, or zero-ed data block.
 
 ### Convertion from VHD/VHDX to VMDK
-- output 2 files; <b>filename</b>.vmdk (descriptor file) and <b>filename</b>-flat.vmdk (raw disk image)
+- output 2 files; <i>filename</i>.vmdk (descriptor file) and <i>filename</i><b>-flat</b>.vmdk (raw disk image)
 - support import to vmware (for example over Microsoft NFS)
 - automatically use -fixed and -sparse
 
