@@ -93,6 +93,8 @@ protected:
 	UINT32 vhd_table_entries_count;
 public:
 	VHD() = default;
+	VHD(_In_z_ PCWSTR file_name) : Image(file_name)
+	{}
 	VHD(_In_ HANDLE file, _In_ UINT32 cluster_size) : Image(file, cluster_size)
 	{}
 	void ReadHeader()

@@ -17,7 +17,7 @@
 void usage()
 {
 	fputws(
-		L"Make VHD/VHDX that shares data blocks with source.\n"
+		L"Make VHD/VHDX/VMDK that shares data blocks with source.\n"
 		L"\n"
 		L"MakeVHDX [-fixed | -dynamic] [-bN] [-sparse] Source [Destination]\n"
 		L"\n"
@@ -36,6 +36,7 @@ void usage()
 		L"Supported Image Types and File Extensions\n"
 		L" VHDX : .vhdx (.avhdx Disallowed)\n"
 		L" VHD  : .vhd  (.avhd  Disallowed)\n"
+		L" VMDK : .vmdk (only for destination)\n"
 		L" RAW  : .* (Other than above)\n",
 		stderr);
 	ExitProcess(EXIT_FAILURE);

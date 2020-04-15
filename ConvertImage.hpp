@@ -14,6 +14,7 @@ struct Option
 	std::optional<bool> is_fixed;
 	bool force_sparse = false;
 };
-std::unique_ptr<Image> DetectImageFormatByData(_In_ HANDLE file);
-std::unique_ptr<Image> DetectImageFormatByExtension(_In_z_ PCWSTR file_name);
+Image *DetectImageFormatByData(_In_ HANDLE file);
+Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name);
+Image *OpenSrc(PCWSTR src_file_name);
 void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_ const Option& options);

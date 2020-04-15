@@ -148,6 +148,8 @@ protected:
 	UINT32 vhdx_table_write_size;
 public:
 	VHDX() = default;
+	VHDX(_In_z_ PCWSTR file_name) : Image(file_name)
+	{}
 	VHDX(_In_ HANDLE file, _In_ UINT32 cluster_size) : Image(file, cluster_size)
 	{
 		if (cluster_size > VHDX_MINIMUM_ALIGNMENT)

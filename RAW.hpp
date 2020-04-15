@@ -9,7 +9,9 @@ protected:
 	UINT32 raw_block_size;
 public:
 	RAW() = default;
-	RAW(_In_ HANDLE file, _In_ UINT32 cluster_size) : Image(file, cluster_size)
+	RAW(_In_z_ PCWSTR file_name) : Image(file_name)
+	{}
+	RAW(_In_ HANDLE file, _In_ UINT32 cluster_size) : Image(file, cluster_size)	
 	{}
 	void ReadHeader()
 	{
@@ -22,7 +24,7 @@ public:
 		BitScanForward64(&bit_shift, raw_disk_size.QuadPart);
 		raw_block_size = (std::max)(1U << (std::min)(bit_shift, 31UL), require_alignment);
 	}
-	void ConstructHeader(_In_ UINT64 disk_size, _In_ UINT32, _In_ UINT32 sector_size, _In_ bool)
+	void ConstructHeader(_In_ UINT64 disk_size, _In_ UINT32 , _In_ UINT32 sector_size, _In_ bool)
 	{
 		if (disk_size == 0 || disk_size % RAW_SECTOR_SIZE != 0)
 		{
@@ -35,6 +37,7 @@ public:
 		ULONG bit_shift;
 		BitScanForward64(&bit_shift, disk_size);
 		raw_block_size = (std::max)(1U << (std::min)(bit_shift, 31UL), require_alignment);
+		//raw_block_size = block_size;
 		FILE_END_OF_FILE_INFO eof_info;
 		raw_disk_size.QuadPart = eof_info.EndOfFile.QuadPart = disk_size;
 		if (!SetFileInformationByHandle(image_file, FileEndOfFileInfo, &eof_info, sizeof eof_info))
@@ -76,7 +79,7 @@ public:
 	std::optional<UINT64> ProbeBlock(_In_ UINT32 index) const noexcept
 	{
 		_ASSERT(index < GetTableEntriesCount());
-		return raw_block_size * index;
+		return UINT64(raw_block_size) * index;
 	}
 	UINT64 AllocateBlockForWrite(_In_ UINT32 index) noexcept
 	{
