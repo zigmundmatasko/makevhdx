@@ -2,14 +2,16 @@
 #include "VHD.hpp"
 #include "VHDX.hpp"
 #include "RAW.hpp"
+#include "VMDK.hpp"
+#include <typeinfo>
 
-std::unique_ptr<Image> DetectImageFormatByData(_In_ HANDLE file)
+Image *DetectImageFormatByData(_In_ HANDLE file)
 {
 	decltype(VHDX_FILE_IDENTIFIER::Signature) vhdx_signature;
 	ReadFileWithOffset(file, &vhdx_signature, VHDX_FILE_IDENTIFIER_OFFSET);
 	if (vhdx_signature == VHDX_SIGNATURE)
 	{
-		return std::unique_ptr<Image>(new VHDX);
+		return (new VHDX);
 	}
 	LARGE_INTEGER fsize;
 	ATLENSURE(GetFileSizeEx(file, &fsize));
@@ -17,42 +19,41 @@ std::unique_ptr<Image> DetectImageFormatByData(_In_ HANDLE file)
 	ReadFileWithOffset(file, &vhd_cookie, ROUNDUP(fsize.QuadPart - VHD_DYNAMIC_HEADER_OFFSET, sizeof(VHD_FOOTER)));
 	if (vhd_cookie == VHD_COOKIE)
 	{
-		return std::unique_ptr<Image>(new VHD);
+		return (new VHD);
 	}
 	if (fsize.LowPart % RAW_SECTOR_SIZE != 0)
 	{
 		die(L"Image type detection failed.");
 	}
-	return std::unique_ptr<Image>(new RAW);
+	return (new RAW);
 }
-std::unique_ptr<Image> DetectImageFormatByExtension(_In_z_ PCWSTR file_name)
+Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name)
 {
 	PCWSTR extension = PathFindExtensionW(file_name);
 	if (_wcsicmp(extension, L".vhdx") == 0)
 	{
-		return std::unique_ptr<Image>(new VHDX);
+		return (new VHDX(file_name));
 	}
 	if (_wcsicmp(extension, L".vhd") == 0)
 	{
-		return std::unique_ptr<Image>(new VHD);
+		return (new VHD(file_name));
+	}
+	if (_wcsicmp(extension, L".vmdk") == 0)
+	{
+		return (new VMDK(file_name));
 	}
 	if (_wcsicmp(extension, L".avhdx") == 0 || _wcsicmp(extension, L".avhd") == 0)
 	{
 		die(L".avhdx/.avhd is not allowed.");
 	}
-	return std::unique_ptr<Image>(new RAW);
+	return (new RAW(file_name));
 }
-void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_ const Option& options)
-{
-	wprintf(
-		L"Source\n"
-		L"Path:              %ls\n",
-		src_file_name
-	);
-	ATL::CHandle src_file(CreateFileW(src_file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+
+Image *OpenSrc(_In_z_ PCWSTR file_name) {
+	HANDLE src_file = CreateFileW(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
 	if (src_file == INVALID_HANDLE_VALUE)
 	{
-		src_file.Detach();
+		//src_file.Detach();
 		die();
 	}
 	ULONG fs_flags;
@@ -61,17 +62,70 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 	{
 		die(L"Filesystem doesn't support Block Cloning feature.");
 	}
-	BY_HANDLE_FILE_INFORMATION file_info;
-	ATLENSURE(GetFileInformationByHandle(src_file, &file_info));
 	ULONG junk;
 	FSCTL_GET_INTEGRITY_INFORMATION_BUFFER get_integrity;
 	if (!DeviceIoControl(src_file, FSCTL_GET_INTEGRITY_INFORMATION, nullptr, 0, &get_integrity, sizeof get_integrity, &junk, nullptr))
 	{
 		die();
 	}
-	auto src_img = DetectImageFormatByData(src_file);
-	src_img->Attach(src_file, get_integrity.ClusterSizeInBytes);
-	src_img->ReadHeader();
+	Image *img = DetectImageFormatByData(src_file);
+	img->Attach(src_file, get_integrity);
+	img->ReadHeader();
+	if (PCWSTR reason; !img->CheckConvertible(&reason))
+	{
+		die(reason);
+	}
+	return (img);
+}
+
+Image *OpenDst(_In_z_ PCWSTR file_name, _In_ bool force_sparse, _In_ UINT32 block_size, _In_ bool is_fixed, Image *src_img) {
+
+	Image *img = DetectImageFormatByExtension(file_name);
+	//if ( typeid(*img) == typeid(VMDK) ) force_sparse = TRUE;
+	if( _stricmp(img->GetImageTypeName(), "VMDK") == 0 ) force_sparse = TRUE;
+	
+	HANDLE dst_file = CreateFileW(img->GetFileName(), GENERIC_READ | GENERIC_WRITE | DELETE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+	if (dst_file == INVALID_HANDLE_VALUE)
+	{
+		//dst_file.Detach();
+		die();
+	}
+
+	FILE_DISPOSITION_INFO dispos = { TRUE };
+	ATLENSURE(SetFileInformationByHandle(dst_file, FileDispositionInfo, &dispos, sizeof dispos));
+	FSCTL_SET_INTEGRITY_INFORMATION_BUFFER set_integrity = { src_img->GetIntegrity().ChecksumAlgorithm, 0, src_img->GetIntegrity().Flags };
+	if (!DeviceIoControl(dst_file, FSCTL_SET_INTEGRITY_INFORMATION, &set_integrity, sizeof set_integrity, nullptr, 0, nullptr, nullptr))
+	{
+		die();
+	}
+
+	if (force_sparse || src_img->GetFileInfo().dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE)
+	{	
+		ULONG junk;
+		if (!DeviceIoControl(dst_file, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &junk, nullptr))
+		{
+			die();
+		}
+	}
+	img->Attach(dst_file, src_img->GetIntegrity().ClusterSizeInBytes);
+	img->ConstructHeader(src_img->GetDiskSize(), block_size, src_img->GetSectorSize(), is_fixed);
+
+	return (img);
+}
+
+void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_ const Option& options)
+{
+	ULONG junk;
+
+	// source
+	wprintf(
+		L"Source\n"
+		L"Path:              %ls\n",
+		src_file_name
+	);
+	Image *src_img = OpenSrc(src_file_name);
+	DWORD ClusterSizeInBytes = src_img->GetIntegrity().ClusterSizeInBytes;
+
 	wprintf(
 		L"Image format:      %hs\n"
 		L"Allocation policy: %hs\n"
@@ -83,49 +137,26 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 		src_img->GetDiskSize() / (1024.f * 1024.f * 1024.f),
 		src_img->GetBlockSize() / (1024.f * 1024.f)
 	);
-	if (PCWSTR reason; !src_img->CheckConvertible(&reason))
-	{
-		die(reason);
-	}
 
+	// destination
 	wprintf(
 		L"\n"
 		L"Destination\n"
-		L"Path:              %ls\n",
+		L"Path Requested     %ls\n",
 		dst_file_name
 	);
-#ifdef _DEBUG
-	ATL::CHandle dst_file(CreateFileW(dst_file_name, GENERIC_READ | GENERIC_WRITE | DELETE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
-#else
-	ATL::CHandle dst_file(CreateFileW(dst_file_name, GENERIC_READ | GENERIC_WRITE | DELETE, 0, nullptr, CREATE_NEW, FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
-#endif
-	if (dst_file == INVALID_HANDLE_VALUE)
-	{
-		dst_file.Detach();
-		die();
-	}
-	FILE_DISPOSITION_INFO dispos = { TRUE };
-	ATLENSURE(SetFileInformationByHandle(dst_file, FileDispositionInfo, &dispos, sizeof dispos));
-	FSCTL_SET_INTEGRITY_INFORMATION_BUFFER set_integrity = { get_integrity.ChecksumAlgorithm, 0, get_integrity.Flags };
-	if (!DeviceIoControl(dst_file, FSCTL_SET_INTEGRITY_INFORMATION, &set_integrity, sizeof set_integrity, nullptr, 0, nullptr, nullptr))
-	{
-		die();
-	}
-	if (options.force_sparse || file_info.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE)
-	{
-		if (!DeviceIoControl(dst_file, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &junk, nullptr))
-		{
-			die();
-		}
-	}
-	auto dst_img = DetectImageFormatByExtension(dst_file_name);
-	dst_img->Attach(dst_file, get_integrity.ClusterSizeInBytes);
-	dst_img->ConstructHeader(src_img->GetDiskSize(), options.block_size, src_img->GetSectorSize(), options.is_fixed.value_or(src_img->IsFixed()));
+	bool is_sparse = options.force_sparse || src_img->GetFileInfo().dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE;
+	bool is_fixed = options.is_fixed.value_or(src_img->IsFixed());
+	
+	Image *dst_img = OpenDst(dst_file_name, is_sparse, options.block_size, is_fixed, src_img);
+
 	wprintf(
+		L"Path Modify        %ls\n"
 		L"Image format:      %hs\n"
 		L"Allocation policy: %hs\n"
 		L"Disk size:         %llu(%.3fGB)\n"
 		L"Block size:        %.1fMB\n",
+		dst_img->GetFileName(),
 		dst_img->GetImageTypeName(),
 		dst_img->IsFixed() ? "Preallocate" : "Dynamic",
 		dst_img->GetDiskSize(),
@@ -133,9 +164,11 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 		dst_img->GetBlockSize() / (1024.f * 1024.f)
 	);
 
+
+	// FOR
 	const UINT32 source_block_size = src_img->GetBlockSize();
 	const UINT32 destination_block_size = dst_img->GetBlockSize();
-	DUPLICATE_EXTENTS_DATA dup_extent = { src_file };
+	DUPLICATE_EXTENTS_DATA dup_extent = { src_img->GetFileH() };
 	if (source_block_size <= destination_block_size)
 	{
 		for (UINT32 read_block_number = 0; read_block_number < src_img->GetTableEntriesCount(); read_block_number++)
@@ -148,10 +181,10 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 				dup_extent.SourceFileOffset.QuadPart = *read_physical_address;
 				dup_extent.TargetFileOffset.QuadPart = dst_img->AllocateBlockForWrite(write_virtual_block_number) + write_virtual_block_offset;
 				dup_extent.ByteCount.QuadPart = source_block_size;
-				_ASSERT(dup_extent.SourceFileOffset.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-				_ASSERT(dup_extent.TargetFileOffset.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-				_ASSERT(dup_extent.ByteCount.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-				if (!DeviceIoControl(dst_file, FSCTL_DUPLICATE_EXTENTS_TO_FILE, &dup_extent, sizeof dup_extent, nullptr, 0, &junk, nullptr))
+				_ASSERT(dup_extent.SourceFileOffset.QuadPart % ClusterSizeInBytes == 0);
+				_ASSERT(dup_extent.TargetFileOffset.QuadPart % ClusterSizeInBytes == 0);
+				_ASSERT(dup_extent.ByteCount.QuadPart % ClusterSizeInBytes == 0);
+				if (!DeviceIoControl(dst_img->GetFileH(), FSCTL_DUPLICATE_EXTENTS_TO_FILE, &dup_extent, sizeof dup_extent, nullptr, 0, &junk, nullptr))
 				{
 					die();
 				}
@@ -172,10 +205,10 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 					dup_extent.SourceFileOffset.QuadPart = *read_physical_address + read_block_offset;
 					dup_extent.TargetFileOffset.QuadPart = dst_img->AllocateBlockForWrite(write_virtual_block_number);
 					dup_extent.ByteCount.QuadPart = destination_block_size;
-					_ASSERT(dup_extent.SourceFileOffset.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-					_ASSERT(dup_extent.TargetFileOffset.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-					_ASSERT(dup_extent.ByteCount.QuadPart % get_integrity.ClusterSizeInBytes == 0);
-					if (!DeviceIoControl(dst_file, FSCTL_DUPLICATE_EXTENTS_TO_FILE, &dup_extent, sizeof dup_extent, nullptr, 0, &junk, nullptr))
+					_ASSERT(dup_extent.SourceFileOffset.QuadPart % ClusterSizeInBytes == 0);
+					_ASSERT(dup_extent.TargetFileOffset.QuadPart % ClusterSizeInBytes == 0);
+					_ASSERT(dup_extent.ByteCount.QuadPart % ClusterSizeInBytes == 0);
+					if (!DeviceIoControl(dst_img->GetFileH(), FSCTL_DUPLICATE_EXTENTS_TO_FILE, &dup_extent, sizeof dup_extent, nullptr, 0, &junk, nullptr))
 					{
 						die();
 					}
@@ -186,6 +219,7 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 
 	_ASSERT(dst_img->CheckConvertible(nullptr));
 	dst_img->WriteHeader();
-	dispos = { FALSE };
-	ATLENSURE(SetFileInformationByHandle(dst_file, FileDispositionInfo, &dispos, sizeof dispos));
+	FILE_DISPOSITION_INFO dispos = { FALSE };
+	//dispos = { FALSE };
+	ATLENSURE(SetFileInformationByHandle(dst_img->GetFileH(), FileDispositionInfo, &dispos, sizeof dispos));
 }
