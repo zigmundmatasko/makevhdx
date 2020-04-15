@@ -2,7 +2,7 @@
 Converting a VHD/VHDX to VHD/VHDX using [block cloning](https://docs.microsoft.com/windows-server/storage/refs/block-cloning) to share used data blocks.
 This is proof of concept.
 ```
-Make VHD/VHDX that shares data blocks with source.
+Make VHD/VHDX/VMDK that shares data blocks with source.
 
 MakeVHDX [-fixed | -dynamic] [-bN] [-sparse] Source [Destination]
 
@@ -21,6 +21,7 @@ Destination  Specifies conversion destination.
 Supported Image Types and File Extensions
  VHDX : .vhdx (.avhdx Disallowed)
  VHD  : .vhd  (.avhd  Disallowed)
+ VMDK : .vmdk (only for destination, automatically add '-flat')
  RAW  : .* (Other than above)
 ```
 ## Requirements and Limitations
