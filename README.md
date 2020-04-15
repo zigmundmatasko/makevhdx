@@ -42,5 +42,8 @@ Supported Image Types and File Extensions
 - support import to vmware (for example over Microsoft NFS)
 - automatically use -fixed and -sparse
 
+### Conversion speed
+- various 10-100 Gbytes/sec (on single sata ssd; only metadata is copied)
+
 ## License
 MIT License
