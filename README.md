@@ -21,7 +21,7 @@ Destination  Specifies conversion destination.
 Supported Image Types and File Extensions
  VHDX : .vhdx (.avhdx Disallowed)
  VHD  : .vhd  (.avhd  Disallowed)
- VMDK : .vmdk (only for destination, automatically add '-flat')
+ VMDK : .vmdk (only for destination, automatically add suffix '-flat', output is sparse)
  RAW  : .* (Other than above)
 ```
 ## Requirements and Limitations
