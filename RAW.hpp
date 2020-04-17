@@ -24,7 +24,7 @@ public:
 		BitScanForward64(&bit_shift, raw_disk_size.QuadPart);
 		raw_block_size = (std::max)(1U << (std::min)(bit_shift, 31UL), require_alignment);
 	}
-	void ConstructHeader(_In_ UINT64 disk_size, _In_ UINT32 , _In_ UINT32 sector_size, _In_ bool)
+	void ConstructHeader(_In_ UINT64 disk_size, _In_ UINT32 block_size, _In_ UINT32 sector_size, _In_ bool)
 	{
 		if (disk_size == 0 || disk_size % RAW_SECTOR_SIZE != 0)
 		{
@@ -34,10 +34,11 @@ public:
 		{
 			die(L"Unsuported RAW sector size.");
 		}
-		ULONG bit_shift;
-		BitScanForward64(&bit_shift, disk_size);
-		raw_block_size = (std::max)(1U << (std::min)(bit_shift, 31UL), require_alignment);
-		//raw_block_size = block_size;
+		// bit_shift;
+		//BitScanForward64(&bit_shift, disk_size);
+		//raw_block_size = (std::max)(1U << (std::min)(bit_shift, 31UL), require_alignment);
+		//raw_block_size = (std::max) (block_size, raw_block_size);
+		raw_block_size = block_size;
 		FILE_END_OF_FILE_INFO eof_info;
 		raw_disk_size.QuadPart = eof_info.EndOfFile.QuadPart = disk_size;
 		if (!SetFileInformationByHandle(image_file, FileEndOfFileInfo, &eof_info, sizeof eof_info))

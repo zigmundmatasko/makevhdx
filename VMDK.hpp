@@ -38,21 +38,21 @@ public:
 		// write metadata
 		/*
 			# Disk DescriptorFile
-			version = 1
-			CID = RANDOM UINT32
-			parentCID = ffffffff
-			createType = "VMFS"
-			isNativeSnapshot = "no"
+			version=1
+			CID=RANDOM UINT32
+			parentCID=ffffffff
+			createType="VMFS"
+			isNativeSnapshot="no"
 
 			# Extent description
 			RW COUNT_OF_SECTORS VMFS "FILENAME-flat.vmdk"
 
 			# The Disk Data Base
-			ddb.virtualHWVersion = "7"
-			ddb.adapterType = "lsilogic"
-			ddb.geometry.sectors = "255"
-			ddb.geometry.heads = "16"
-			ddb.geometry.cylinders = "COUNT_OF_SECTORS/16/255"
+			ddb.virtualHWVersion="7"
+			ddb.adapterType="lsilogic"
+			ddb.geometry.sectors="255"
+			ddb.geometry.heads="16"
+			ddb.geometry.cylinders="COUNT_OF_SECTORS/16/255"
 		*/
 
 		if (f) {
@@ -60,19 +60,19 @@ public:
 			fwprintf(
 				f,
 				L"# Disk DescriptorFile\n"
-				L"version = 1\n"
-				L"CID = %8.8x\n"
-				L"parentCID = ffffffff\n"
-				L"createType = \"VMFS\"\n"
-				L"isNativeSnapshot = \"no\"\n"
+				L"version=1\n"
+				L"CID=%8.8x\n"
+				L"parentCID=ffffffff\n"
+				L"createType=\"VMFS\"\n"
+				L"isNativeSnapshot=\"no\"\n"
 				L"\n"
 				L"RW %llu VMFS \"%s\"\n"
 				L"\n"
-				L"ddb.virtualHWVersion = \"7\"\n"
-				L"ddb.adapterType = \"lsilogic\"\n"
-				L"ddb.geometry.sectors = \"255\"\n"
-				L"ddb.geometry.heads = \"16\"\n"
-				L"ddb.geometry.cylinders = \"%lli\"\n",
+				L"ddb.virtualHWVersion=\"7\"\n"
+				L"ddb.adapterType=\"lsilogic\"\n"
+				L"ddb.geometry.sectors=\"255\"\n"
+				L"ddb.geometry.heads=\"16\"\n"
+				L"ddb.geometry.cylinders=\"%lli\"\n",
 				rand(),
 				raw_disk_size.QuadPart / sector_size,
 				PathFindFileNameW(flat_file_name),
