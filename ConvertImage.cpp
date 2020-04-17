@@ -147,8 +147,9 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 	);
 	bool is_sparse = options.force_sparse || src_img->GetFileInfo().dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE;
 	bool is_fixed = options.is_fixed.value_or(src_img->IsFixed());
-	
-	Image *dst_img = OpenDst(dst_file_name, is_sparse, options.block_size, is_fixed, src_img);
+
+	UINT32 block_size = options.block_size ? options.block_size : src_img->GetBlockSize();
+	Image *dst_img = OpenDst(dst_file_name, is_sparse, block_size, is_fixed, src_img);
 
 	wprintf(
 		L"Path Modify        %ls\n"
