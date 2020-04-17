@@ -4,7 +4,7 @@ This is proof of concept.
 ```
 Make VHD/VHDX/VMDK that shares data blocks with source.
 
-MakeVHDX [-fixed | -dynamic] [-bN] [-sparse] Source [Destination]
+MakeVHDX [-fixed | -dynamic] -bN [-sparse] Source [Destination]
 
 Source       Specifies conversion source.
 Destination  Specifies conversion destination.
