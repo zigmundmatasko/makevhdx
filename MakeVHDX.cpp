@@ -19,7 +19,7 @@ void usage()
 	fputws(
 		L"Make VHD/VHDX/VMDK that shares data blocks with source.\n"
 		L"\n"
-		L"MakeVHDX [-fixed | -dynamic] [-bN] [-sparse] Source [Destination]\n"
+		L"MakeVHDX [-fixed | -dynamic] [-bN] [-sparse] [-raw] Source Destination\n"
 		L"\n"
 		L"Source       Specifies conversion source.\n"
 		L"Destination  Specifies conversion destination.\n"
@@ -32,6 +32,7 @@ void usage()
 		L"             Silently ignore, if output is image type that doesn't use blocks. (Such as fixed VHD)\n"
 		L"-sparse      Make output image is sparse file.\n"
 		L"             By default, output file is also sparse only when source file is sparse.\n"
+		L"-raw         Ignore File Extensions, use raw data block\n"
 		L"\n"
 		L"Supported Image Types and File Extensions\n"
 		L" VHDX : .vhdx (.avhdx Disallowed)\n"
@@ -59,7 +60,15 @@ int __cdecl wmain(_In_ int argc, _Inout_z_ PWSTR argv[])
 	Option options;
 	for (int i = 1; i < argc; i++)
 	{
-		if (_wcsicmp(argv[i], L"-fixed") == 0)
+		if (_wcsicmp(argv[i], L"-raw") == 0)
+		{
+			if (options.raw)
+			{
+				usage();
+			}
+			options.raw = true;
+		}
+		else if (_wcsicmp(argv[i], L"-fixed") == 0)
 		{
 			if (options.is_fixed)
 			{

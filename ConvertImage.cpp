@@ -5,51 +5,55 @@
 #include "VMDK.hpp"
 #include <typeinfo>
 
-Image *DetectImageFormatByData(_In_ HANDLE file)
+Image *DetectImageFormatByData(_In_ HANDLE file, _In_ boolean raw)
 {
-	decltype(VHDX_FILE_IDENTIFIER::Signature) vhdx_signature;
-	ReadFileWithOffset(file, &vhdx_signature, VHDX_FILE_IDENTIFIER_OFFSET);
-	if (vhdx_signature == VHDX_SIGNATURE)
-	{
-		return (new VHDX);
-	}
-	LARGE_INTEGER fsize;
-	ATLENSURE(GetFileSizeEx(file, &fsize));
-	decltype(VHD_FOOTER::Cookie) vhd_cookie;
-	ReadFileWithOffset(file, &vhd_cookie, ROUNDUP(fsize.QuadPart - VHD_DYNAMIC_HEADER_OFFSET, sizeof(VHD_FOOTER)));
-	if (vhd_cookie == VHD_COOKIE)
-	{
-		return (new VHD);
-	}
-	if (fsize.LowPart % RAW_SECTOR_SIZE != 0)
-	{
-		die(L"Image type detection failed.");
+	if (!raw) {
+		decltype(VHDX_FILE_IDENTIFIER::Signature) vhdx_signature;
+		ReadFileWithOffset(file, &vhdx_signature, VHDX_FILE_IDENTIFIER_OFFSET);
+		if (vhdx_signature == VHDX_SIGNATURE)
+		{
+			return (new VHDX);
+		}
+		LARGE_INTEGER fsize;
+		ATLENSURE(GetFileSizeEx(file, &fsize));
+		decltype(VHD_FOOTER::Cookie) vhd_cookie;
+		ReadFileWithOffset(file, &vhd_cookie, ROUNDUP(fsize.QuadPart - VHD_DYNAMIC_HEADER_OFFSET, sizeof(VHD_FOOTER)));
+		if (vhd_cookie == VHD_COOKIE)
+		{
+			return (new VHD);
+		}
+		if (fsize.LowPart % RAW_SECTOR_SIZE != 0)
+		{
+			die(L"Image type detection failed.");
+		}
 	}
 	return (new RAW);
 }
-Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name)
+Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name, _In_ boolean raw)
 {
-	PCWSTR extension = PathFindExtensionW(file_name);
-	if (_wcsicmp(extension, L".vhdx") == 0)
-	{
-		return (new VHDX(file_name));
-	}
-	if (_wcsicmp(extension, L".vhd") == 0)
-	{
-		return (new VHD(file_name));
-	}
-	if (_wcsicmp(extension, L".vmdk") == 0)
-	{
-		return (new VMDK(file_name));
-	}
-	if (_wcsicmp(extension, L".avhdx") == 0 || _wcsicmp(extension, L".avhd") == 0)
-	{
-		die(L".avhdx/.avhd is not allowed.");
+	if (!raw) {
+		PCWSTR extension = PathFindExtensionW(file_name);
+		if (_wcsicmp(extension, L".vhdx") == 0)
+		{
+			return (new VHDX(file_name));
+		}
+		if (_wcsicmp(extension, L".vhd") == 0)
+		{
+			return (new VHD(file_name));
+		}
+		if (_wcsicmp(extension, L".vmdk") == 0)
+		{
+			return (new VMDK(file_name));
+		}
+		if (_wcsicmp(extension, L".avhdx") == 0 || _wcsicmp(extension, L".avhd") == 0)
+		{
+			die(L".avhdx/.avhd is not allowed.");
+		}
 	}
 	return (new RAW(file_name));
 }
 
-Image *OpenSrc(_In_z_ PCWSTR file_name) {
+Image *OpenSrc(_In_z_ PCWSTR file_name, _In_ boolean raw) {
 	HANDLE src_file = CreateFileW(file_name, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
 	if (src_file == INVALID_HANDLE_VALUE)
 	{
@@ -68,7 +72,7 @@ Image *OpenSrc(_In_z_ PCWSTR file_name) {
 	{
 		die();
 	}
-	Image *img = DetectImageFormatByData(src_file);
+	Image *img = DetectImageFormatByData(src_file, raw);
 	img->Attach(src_file, get_integrity);
 	img->ReadHeader();
 	if (PCWSTR reason; !img->CheckConvertible(&reason))
@@ -78,10 +82,9 @@ Image *OpenSrc(_In_z_ PCWSTR file_name) {
 	return (img);
 }
 
-Image *OpenDst(_In_z_ PCWSTR file_name, _In_ bool force_sparse, _In_ UINT32 block_size, _In_ bool is_fixed, Image *src_img) {
+Image *OpenDst(_In_z_ PCWSTR file_name, _In_ bool force_sparse, _In_ UINT32 block_size, _In_ bool is_fixed, _In_ boolean raw, Image *src_img) {
 
-	Image *img = DetectImageFormatByExtension(file_name);
-	//if ( typeid(*img) == typeid(VMDK) ) force_sparse = TRUE;
+	Image *img = DetectImageFormatByExtension(file_name, raw);
 	if( _stricmp(img->GetImageTypeName(), "VMDK") == 0 ) force_sparse = TRUE;
 	
 	HANDLE dst_file = CreateFileW(img->GetFileName(), GENERIC_READ | GENERIC_WRITE | DELETE, 0, nullptr, CREATE_ALWAYS, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
@@ -123,8 +126,8 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 		L"Path:              %ls\n",
 		src_file_name
 	);
-	Image *src_img = OpenSrc(src_file_name);
-	DWORD ClusterSizeInBytes = src_img->GetIntegrity().ClusterSizeInBytes;
+	Image *src_img = OpenSrc(src_file_name, options.raw);
+	//DWORD ClusterSizeInBytes = src_img->GetIntegrity().ClusterSizeInBytes;
 
 	wprintf(
 		L"Image format:      %hs\n"
@@ -149,7 +152,7 @@ void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_
 	bool is_fixed = options.is_fixed.value_or(src_img->IsFixed());
 
 	UINT32 block_size = options.block_size ? options.block_size : src_img->GetBlockSize();
-	Image *dst_img = OpenDst(dst_file_name, is_sparse, block_size, is_fixed, src_img);
+	Image *dst_img = OpenDst(dst_file_name, is_sparse, block_size, is_fixed, options.raw, src_img);
 
 	wprintf(
 		L"Path Modify        %ls\n"

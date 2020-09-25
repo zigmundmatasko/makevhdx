@@ -13,8 +13,9 @@ struct Option
 	UINT32 block_size = 0;
 	std::optional<bool> is_fixed;
 	bool force_sparse = false;
+	bool raw = false;
 };
-Image *DetectImageFormatByData(_In_ HANDLE file);
-Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name);
-Image *OpenSrc(PCWSTR src_file_name);
+Image *DetectImageFormatByData(_In_ HANDLE file, _In_ boolean raw);
+Image *DetectImageFormatByExtension(_In_z_ PCWSTR file_name, _In_ boolean raw);
+Image *OpenSrc(PCWSTR src_file_name, _In_ boolean raw);
 void ConvertImage(_In_z_ PCWSTR src_file_name, _In_z_ PCWSTR dst_file_name, _In_ const Option& options);
