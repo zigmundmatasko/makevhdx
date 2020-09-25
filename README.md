@@ -4,7 +4,7 @@ This is proof of concept.
 ```
 Make VHD/VHDX/VMDK that shares data blocks with source.
 
-MakeVHDX [-fixed | -dynamic] -bN [-sparse] Source [Destination]
+MakeVHDX [-fixed | -dynamic] -bN [-sparse] [-raw] Source Destination
 
 Source       Specifies conversion source.
 Destination  Specifies conversion destination.
@@ -17,6 +17,7 @@ Destination  Specifies conversion destination.
              Silently ignore, if output is image type that doesn't use blocks. (Such as fixed VHD)
 -sparse      Make output image is sparse file.
              By default, output file is also sparse only when source file is sparse.
+-raw         Ignore File Extensions, use raw data block
 
 Supported Image Types and File Extensions
  VHDX : .vhdx (.avhdx Disallowed)
